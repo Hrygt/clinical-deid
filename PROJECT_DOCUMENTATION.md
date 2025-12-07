@@ -141,16 +141,19 @@ Democratize clinical text de-identification by providing an open-source, state-o
 
 ## Development Roadmap
 
-### Phase 1: Core Model ✅ (December 2025)
+### Phase 1: Core Model ✅ (December 7, 2025) - COMPLETE
 
 - [x] Download and filter Nemotron-PII healthcare subset
 - [x] Implement BILOU preprocessing pipeline
 - [x] Fine-tune Clinical-Longformer
-- [x] Achieve >95% F1 on validation set
+- [x] Achieve >95% F1 on validation set (97.74% achieved)
 - [x] Basic inference script (deid.py)
 - [x] Manual testing on realistic notes
-- [ ] Complete training through epoch 10
-- [ ] Export final model weights
+- [x] Complete training through epoch 10
+- [x] Export final model weights
+- [x] Publish to GitHub: https://github.com/Hrygt/clinical-deid
+- [x] Publish to HuggingFace: https://huggingface.co/riggsmed/clinical-deid
+- [x] LinkedIn announcement
 
 ### Phase 2: Lambda Deployment (December 2025 - January 2026)
 

@@ -2,7 +2,10 @@
 
 **Last Updated:** December 7, 2025  
 **Project Owner:** Gary Riggs, MD | RIGGSMED LLC  
-**Repository:** C:\MyScripts\ModelWorks\clinical-deid
+**Repository:** C:\MyScripts\ModelWorks\clinical-deid  
+**GitHub:** https://github.com/Hrygt/clinical-deid  
+**HuggingFace:** https://huggingface.co/riggsmed/clinical-deid  
+**Status:** v1.0 Released (Open Source)
 
 ---
 
