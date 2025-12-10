@@ -1,6 +1,6 @@
 # api.py - Clinical De-identification FastAPI Service
 # Port 8001 on EC2 alongside CPT service (port 8000)
-# v1.2.0 - Added automatic chunking + medical terminology whitelist
+# v1.2.1 - Use deidentify_text from deid.py (includes DOB cleanup)
 
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification
@@ -15,7 +15,7 @@ import os
 import re
 
 from labels import ID2LABEL, ENTITY_TYPES
-from deid import ClinicalDeidentifier
+from deid import ClinicalDeidentifier, deidentify_text
 from medical_whitelist import MEDICAL_WHITELIST_LOWER
 
 # === Configuration ===
@@ -478,21 +478,7 @@ def filter_whitelisted_entities(entities: list[dict]) -> list[dict]:
     return filtered
 
 
-def deidentify_text(text: str, entities: list[dict], seed: Optional[int] = None) -> str:
-    """Replace detected entities with fake data."""
-    
-    deid = ClinicalDeidentifier(seed=seed)
-    deid.reset_cache()
-    
-    # Sort entities by start position (reverse) for safe replacement
-    sorted_entities = sorted(entities, key=lambda x: x["start"], reverse=True)
-    
-    result = text
-    for entity in sorted_entities:
-        replacement = deid.replace(entity["text"], entity["type"])
-        result = result[:entity["start"]] + replacement + result[entity["end"]:]
-    
-    return result
+# deidentify_text is now imported from deid.py (includes DOB cleanup)
 
 
 # === API Endpoints ===
