@@ -104,6 +104,13 @@ raw note text under a **24-hour TTL** and is hard-deleted at the first PHI rende
 graded within the last 24 hours and never PHI-rendered can be re-de-identified; everything
 older is **permanently** carrying whatever de-id artifacts were present when it was stored.
 
+**Checked 2026-07-27, immediately after the v1.3.0 deploy:** `accuracy-originals` held
+**0 items (0 live)**. Nothing was inside the window, so no backfill was run and none was
+possible. Every artifact stored before that deploy permanently carries the pre-fix de-id
+behavior — including the newline over-expansion and the specialty/organism surrogation
+that v1.3.0 closes. Anyone reading an older stored `deid_note` should assume those
+artifacts are present in it.
+
 Consequence to state plainly when reporting any de-id fix: fixes are **forward-only**. They
 change the evidence trail from the deploy onward and repair nothing already stored. (The
 accuracy reporters replay stored grades rather than regrading, so no number a physician has

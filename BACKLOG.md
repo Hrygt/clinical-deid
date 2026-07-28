@@ -3,9 +3,58 @@
 Follow-up ledger. Opened 2026-07-05 after the fusion-fix batch merge
 (tag deploy-2026-07-05-fusion-batch, payload SHA 12b89297).
 
-## SESSION BOARD 2026-07-27 — three defect classes (two built, one designed)
+## SESSION BOARD 2026-07-27 — DEPLOYED (T1 + T2 + reconcile retirement)
 
-**Everything below is at HOLD. Nothing merged, nothing deployed. Awaiting Gary.**
+**SHIPPED 2026-07-27.** Deployed SHA `35253908`, api v1.3.0, all six post-deploy live
+probes green, `/deid/health` reporting `version_verified: true`. Institution-slot design
+memo (Task 3) remains **HOLDING for ruling** — no build, per the deploy instruction.
+
+Deploy order was A → T1 → T2 as ruled. The merge sequence was probed for conflicts and
+the combined tree ran the full battery *before* any merge landed on main.
+
+### The durable lesson: two defects escaped the unit suites, caught by live probes
+
+Both were in T2's own witness sentence. Both are fixed, deployed and pinned.
+
+1. **The deployed model emits span shapes the local checkpoint does not.** The box
+   returned ONE span `FIRST_NAME 'podiatry. Podiatry'` across the sentence boundary.
+   `filter_whitelisted_entities` can only test the WHOLE span ("podiatry. podiatry"), so
+   the veto missed, and `_split_name_spans` split it into pieces *downstream* of the
+   filter. Every T2 unit case had constructed PRE-SPLIT per-token entities, silently
+   assuming a split that had already happened — green suite, broken prod. Fix: the split
+   whitelist-checks each PIECE it produces.
+2. **The veto existed at three layers; the fourth had none.** After the split belt
+   shipped, 1 of 2 instances still died — and the survivor was the LOWERCASE one, which
+   was the tell. The patient-token backstop at the end of `deidentify_text` rescans the
+   OUTPUT and replaces every CAPITALIZED `name_map` token independent of entities;
+   `resolve_names` had keyed "podiatry" off the joined span. `api.patient_sweep` already
+   carried this whitelist guard — the backstop was its missing sibling.
+
+**Rule for any future veto/whitelist work:** a token-survival guarantee must hold at
+EVERY layer that can substitute text — the detection filter, the span splitters, the
+newline clip, `patient_sweep`, and the name-map backstop. Adding a vocabulary entry is
+not enough; enumerate the substitution sites. And constructed unit entities must match
+the span shapes the DEPLOYED model actually emits — check with
+`/deid/process return_entities` before trusting a green suite.
+
+### Retroactive repair: the 24h window was CHECKED and is EMPTY
+`accuracy-originals` scanned read-only after the deploy: **0 items total, 0 live.** No
+batch is inside the 24-hour window, so **nothing was re-deidentifiable and no backfill
+was run.** Every stored de-identified artifact predating this deploy permanently carries
+whatever de-id artifacts were present when it was written. These fixes are
+**forward-only** — standing statement in `docs/DEPLOY.md`.
+
+### Note for whoever next touches the remote
+`git push` reports the GitHub repo has MOVED: `Hrygt/clinical-deid` →
+`Hrygt/deid-longformer-nempii`. Pushes still work via redirect. The retired
+`reconcile.sh` had the OLD clone URL hardcoded — one more reason its removal was right,
+and a reason not to reintroduce any boot-time clone.
+
+---
+
+## Pre-deploy gate record (retained — this is the gate evidence, not a live status)
+
+**Superseded by the SHIPPED entry above.**
 
 Standing constraint honored throughout: the reid honesty flag is BLIND to
 deletion-class damage (surrogates insert cleanly, `skipped_unmatched=0`), so every gate
@@ -13,9 +62,10 @@ used **constructed probes**, never the flag.
 
 | branch | class | state | gate evidence |
 |---|---|---|---|
-| `fix/name-span-newline-clip` | NAME spans crossing line breaks (SPAN layer) | built, HOLD | new suite 15/15 (3/15 red on HEAD); battery 10 suites green; gold survival 166/166; deployed grade Moderate |
-| `fix/specialty-whitelist` | specialty + organism words surrogated as names | built, HOLD | new suite 14/14 (7/14 red on HEAD); battery green; recall 98.4% == baseline |
-| `docs/institution-slot-memo` | institution slots surrogated as person names | DESIGN ONLY, no build | `docs/DESIGN_institution_slot_surrogates.md` |
+| `fix/name-span-newline-clip` | NAME spans crossing line breaks (SPAN layer) | **MERGED + DEPLOYED** | new suite 15/15 (3/15 red on HEAD); battery 10 suites green; gold survival 166/166; deployed grade Moderate |
+| `fix/specialty-whitelist` | specialty + organism words surrogated as names | **MERGED + DEPLOYED** (+2 post-deploy fixes, see above) | suite now 19/19; battery green; recall 98.4% == baseline |
+| `chore/retire-reconcile` | reconcile dead code; /deid/health could lie | **MERGED + DEPLOYED** | suite 17/17; gates (a)/(b)/(c) tabled |
+| `docs/institution-slot-memo` | institution slots surrogated as person names | **DESIGN ONLY — HOLDING for ruling** | `docs/DESIGN_institution_slot_surrogates.md` |
 
 ### Task 1 — newline over-expansion, SPAN-layer half
 The 2026-07-19 fix (b8f0298d) closed the **recall-regex** half only. Live probing on
