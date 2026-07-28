@@ -114,6 +114,45 @@ def _bigram_single_span():
 case("1d service bigram as ONE span survives [must survive]", _bigram_single_span)
 
 
+def _span_crossing_sentence_boundary():
+    """POST-DEPLOY DEFECT 2026-07-27, caught by the live probe, not by this suite.
+
+    The DEPLOYED model emits ONE span across the sentence boundary —
+    FIRST_NAME 'podiatry. Podiatry' (verified via /deid/process return_entities) — so
+    filter_whitelisted_entities compares "podiatry. podiatry", matches nothing, and the
+    span survives the veto. _split_name_spans then splits it into two pieces INSIDE
+    deidentify_text, downstream of the filter, and both pieces get surrogated
+    ("...discussed with ana. Ana will be consulting...").
+
+    Every case above constructed PRE-SPLIT per-token entities, which silently assumed
+    the split had already happened. The whitelist must therefore also be applied to the
+    PIECES the split produces — same belt as the newline clip's."""
+    src = "The case was discussed with podiatry. Podiatry will be consulting on the patient."
+    return _survives(src, [("podiatry. Podiatry", "FIRST_NAME", 0)],
+                     must_survive=["podiatry", "Podiatry"])
+case("1e span crossing a sentence boundary: pieces vetoed after split [must survive]",
+     _span_crossing_sentence_boundary)
+
+
+def _split_pieces_organism():
+    # Same shape for the organism vocabulary: one span swallowing a boundary.
+    src = "Culture grew Proteus mirabilis. Mirabilis noted on repeat."
+    return _survives(src, [("mirabilis. Mirabilis", "LAST_NAME", 0)],
+                     must_survive=["mirabilis", "Mirabilis"])
+case("1f organism piece after boundary split also vetoed [must survive]",
+     _split_pieces_organism)
+
+
+def _split_piece_leak_probe():
+    # PHI ASYMMETRY on the new belt: a GENUINE name piece in the same shape must still
+    # redact — the belt may only drop pieces that are themselves whitelisted.
+    src = "Discussed with podiatry. Whitfield will follow up."
+    return _survives(src, [("podiatry. Whitfield", "FIRST_NAME", 0)],
+                     must_survive=["podiatry"], must_redact=["Whitfield"])
+case("1g LEAK mixed span: specialty piece survives, name piece redacts [must stay empty]",
+     _split_piece_leak_probe)
+
+
 # ---- 2. Organism vocabulary (red on HEAD: 'Proteus mirabilis' -> 'Eric Terry') ----
 def _organisms():
     probes = [

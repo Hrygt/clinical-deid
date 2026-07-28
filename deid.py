@@ -907,7 +907,16 @@ def _split_name_spans(entities: list, text: str) -> list:
 
     Also cuts at LINE BREAKS (fix/name-span-newline-clip, replacement-layer belt): a
     cross-newline span reaching deidentify_text from any caller is split per line, so
-    the surrogate never swallows the newline and line structure survives."""
+    the surrogate never swallows the newline and line structure survives.
+
+    WHITELIST BELT (post-deploy defect 2026-07-27): each PIECE is whitelist-checked and
+    DROPPED if it matches. api.filter_whitelisted_entities can only test the WHOLE span,
+    so a span swallowing a boundary hides its pieces from the veto — the deployed model
+    emits FIRST_NAME 'podiatry. Podiatry' as one span, which lowercases to
+    "podiatry. podiatry", matches nothing, and surrogated BOTH instances. Splitting
+    happens here, downstream of that filter, so the veto has to be reapplied to what the
+    split produces. Only a piece that is ITSELF whitelisted is dropped — a genuine name
+    sharing a span with a specialty word ('podiatry. Whitfield') still redacts."""
     out = []
     for ent in entities:
         if ent.get("type") not in ("NAME", "FIRST_NAME", "LAST_NAME"):
@@ -930,7 +939,14 @@ def _split_name_spans(entities: list, text: str) -> list:
                 ne = dict(ent)
                 ne["start"], ne["end"], ne["text"] = s + la, s + rb, text[s + la:s + rb]
                 pieces.append(ne)
-        out.extend(pieces if pieces else [ent])
+        if len(pieces) > 1:
+            kept = [p for p in pieces if p["text"].strip().lower() not in MEDICAL_WHITELIST_LOWER]
+            if len(kept) != len(pieces):
+                dropped = [p["text"] for p in pieces if p not in kept]
+                print(f"[deid] split-piece whitelist drop {ent.get('type')} "
+                      f"{raw!r} -> dropped {dropped}")
+            pieces = kept
+        out.extend(pieces if pieces else ([] if len(cuts) > 2 else [ent]))
     return out
 
 
