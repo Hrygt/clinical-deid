@@ -1133,7 +1133,7 @@ def _repair_identifier_spans(entities: list, text: str) -> list:
         # its digit run, preserving a leading alpha prefix.
         if t in _REPAIR_ID:
             if not any(c.isdigit() for c in span):
-                print(f"[deid] id-span drop (no digit, not an identifier) {t} {s}:{e} {span!r}")
+                print(f"[deid] id-span drop (no digit, not an identifier) {t} {s}:{e} len={e - s}")
                 continue
             if e < len(text) and text[e].isalpha():
                 ne = e
@@ -1141,7 +1141,7 @@ def _repair_identifier_spans(entities: list, text: str) -> list:
                     ne -= 1
                 if ne != e and any(c.isdigit() for c in text[s:ne]):
                     r = dict(ent); r["end"], r["text"] = ne, text[s:ne]
-                    print(f"[deid] id-span over-match trim {t} {s}:{e}->{s}:{ne} {span!r}->{r['text']!r}")
+                    print(f"[deid] id-span over-match trim {t} {s}:{e}->{s}:{ne} len={e - s}->{ne - s}")
                     out.append(r)
                     continue
 
@@ -1156,7 +1156,7 @@ def _repair_identifier_spans(entities: list, text: str) -> list:
                     nend += 1
             if (ns, nend) != (s, e):
                 r = dict(ent); r["start"], r["end"], r["text"] = ns, nend, text[ns:nend]
-                print(f"[deid] geo-span complete {t} {s}:{e}->{ns}:{nend} {span!r}->{r['text']!r}")
+                print(f"[deid] geo-span complete {t} {s}:{e}->{ns}:{nend} len={e - s}->{nend - ns}")
                 out.append(r)
                 continue
 
@@ -1170,14 +1170,14 @@ def _repair_identifier_spans(entities: list, text: str) -> list:
             if (a, z) != (s, e):  # the span is a proper sub-run of a longer run
                 if _ZIP4_TAIL_RE.search(text[:a]):
                     print(f"[deid] sub-run drop (ZIP+4 tail -> Branch 5 backstop) {t} {s}:{e} "
-                          f"run={text[a:z]!r}")
+                          f"run={a}:{z} run_len={z - a}")
                     continue
                 if (z - a) <= 6:
                     r = dict(ent); r["start"], r["end"], r["text"] = a, z, text[a:z]
-                    print(f"[deid] sub-run expand {t} {s}:{e}->{a}:{z} {span!r}->{r['text']!r}")
+                    print(f"[deid] sub-run expand {t} {s}:{e}->{a}:{z} len={e - s}->{z - a}")
                     out.append(r)
                     continue
-                print(f"[deid] sub-run drop (run {z - a}>6 digits) {t} {s}:{e} run={text[a:z]!r}")
+                print(f"[deid] sub-run drop (run {z - a}>6 digits) {t} {s}:{e} run={a}:{z}")
                 continue
 
         out.append(ent)
