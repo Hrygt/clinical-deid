@@ -480,17 +480,17 @@ def _repair_name_span_fragments(text: str, entities: list) -> list:
             word = text[ns:ne]
             if word.lower() in MEDICAL_WHITELIST_LOWER:
                 print(f"[deid] name-fragment drop {e.get('type')} {s}:{en} "
-                      f"{text[s:en]!r} (whitelisted word {word!r})")
+                      f"(whitelisted word {ns}:{ne})")
                 continue
             if (ns, ne) != (s, en):
                 print(f"[deid] name-fragment expand {e.get('type')} {s}:{en} "
-                      f"{text[s:en]!r} -> {word!r}")
+                      f"-> {ns}:{ne}")
         prev = by_span.get((ns, ne))
         if prev is not None:
             if prev.get("type") != e.get("type"):
                 prev["type"] = "NAME"
             print(f"[deid] name-fragment merge {e.get('type')} {s}:{en} "
-                  f"{text[s:en]!r} into {text[ns:ne]!r}")
+                  f"into {ns}:{ne}")
             continue
         ne_ent = dict(e)
         ne_ent["start"], ne_ent["end"], ne_ent["text"] = ns, ne, text[ns:ne]
@@ -537,12 +537,12 @@ def _clip_name_spans_at_line_breaks(text: str, entities: list) -> list:
             word = text[ps:pe]
             if word.lower() in MEDICAL_WHITELIST_LOWER:
                 print(f"[deid] name-newline-clip drop {e.get('type')} {ps}:{pe} "
-                      f"{word!r} (whitelisted piece of {span!r})")
+                      f"(whitelisted piece of {s}:{en})")
                 continue
             ne_ent = dict(e)
             ne_ent["start"], ne_ent["end"], ne_ent["text"] = ps, pe, word
             print(f"[deid] name-newline-clip {e.get('type')} {s}:{en} "
-                  f"{span!r} -> piece {word!r}")
+                  f"-> piece {ps}:{pe} len={pe - ps}")
             out.append(ne_ent)
     return out
 
@@ -727,7 +727,7 @@ def filter_safe_spans(text: str, entities: list[dict]) -> list[dict]:
                     break
         if vetoed_by is not None:
             print(f"[deid] SAFE-veto {vetoed_by} dropped {e.get('type')} span "
-                  f"{s}:{en} {text[s:en]!r}")
+                  f"{s}:{en} len={en - s}")
             continue
         kept.append(e)
     return kept
