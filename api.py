@@ -498,6 +498,54 @@ def _repair_name_span_fragments(text: str, entities: list) -> list:
     return out
 
 
+def _clip_name_spans_at_line_breaks(text: str, entities: list) -> list:
+    """A *_NAME span must never cross a line break (fix/name-span-newline-clip — the
+    SPAN-LAYER half of the 2026-07-19 newline ruling; the recall-regex half is
+    _TITLE_RE/_CRED_RE's horizontal-whitespace separators). The model emits such spans
+    itself ("Sarah\\nJohnson" in a signature block; "\\nWhitaker" which fragment repair
+    expands to "Jonathan\\nWhitaker"), and replacing one deletes the line break — fusing
+    two lines and destroying any line-leading clinical token the model swept (the
+    466697e91ec0 damage shape).
+
+    Split at [\\r\\n]+ into per-line pieces, each trimmed to its non-space edges:
+      * every piece KEEPS its NAME-family type, so a genuine wrapped name still
+        redacts per-line — PHI ASYMMETRY: the clip may never let a real name survive;
+      * whitelist belt: a piece whose word is in MEDICAL_WHITELIST_LOWER is DROPPED so
+        the clinical token survives (fragment-repair doctrine — fix observed drug/header
+        loss by whitelist ADDITION, never by weakening the guard).
+
+    *_NAME types ONLY — never touches DATE / ADDRESS / identifier spans."""
+    NAME_TYPES = ("FIRST_NAME", "LAST_NAME", "NAME")
+    out = []
+    for e in entities:
+        s, en = e.get("start"), e.get("end")
+        if e.get("type") not in NAME_TYPES or s is None or en is None:
+            out.append(e)
+            continue
+        span = text[s:en]
+        if "\n" not in span and "\r" not in span:
+            out.append(e)
+            continue
+        for m in re.finditer(r"[^\r\n]+", span):
+            piece = m.group(0)
+            lead = len(piece) - len(piece.lstrip(" \t"))
+            trail = len(piece) - len(piece.rstrip(" \t"))
+            ps, pe = s + m.start() + lead, s + m.end() - trail
+            if pe <= ps:
+                continue
+            word = text[ps:pe]
+            if word.lower() in MEDICAL_WHITELIST_LOWER:
+                print(f"[deid] name-newline-clip drop {e.get('type')} {ps}:{pe} "
+                      f"{word!r} (whitelisted piece of {span!r})")
+                continue
+            ne_ent = dict(e)
+            ne_ent["start"], ne_ent["end"], ne_ent["text"] = ps, pe, word
+            print(f"[deid] name-newline-clip {e.get('type')} {s}:{en} "
+                  f"{span!r} -> piece {word!r}")
+            out.append(ne_ent)
+    return out
+
+
 def extract_entities(text: str) -> tuple[list[dict], int]:
     """
     Extract entities from text, automatically chunking if needed.
@@ -507,7 +555,8 @@ def extract_entities(text: str) -> tuple[list[dict], int]:
 
     if len(chunks) == 1:
         # No chunking needed
-        return _repair_name_span_fragments(text, extract_entities_single(text)), 1
+        return _clip_name_spans_at_line_breaks(
+            text, _repair_name_span_fragments(text, extract_entities_single(text))), 1
 
     # Process each chunk
     all_chunk_entities = []
@@ -524,7 +573,9 @@ def extract_entities(text: str) -> tuple[list[dict], int]:
 
     # NER span-sanity repair (subword surrogation FP) — applied to the FINAL spans (offsets
     # into the original text), so it is measured by deid_score.py (which calls extract_entities).
-    return _repair_name_span_fragments(text, merged_entities), len(chunks)
+    # Newline clip runs LAST so it also covers repair-expanded and chunk-merged spans.
+    return _clip_name_spans_at_line_breaks(
+        text, _repair_name_span_fragments(text, merged_entities)), len(chunks)
 
 
 def filter_whitelisted_entities(entities: list[dict]) -> list[dict]:
