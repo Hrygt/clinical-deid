@@ -153,6 +153,45 @@ case("1g LEAK mixed span: specialty piece survives, name piece redacts [must sta
      _split_piece_leak_probe)
 
 
+def _name_map_backstop():
+    """POST-DEPLOY DEFECT 2026-07-27, round 2 — found by the SAME live probe after the
+    split-piece belt shipped (1/2 instances still died).
+
+    The patient-token backstop at the end of deidentify_text re-scans the OUTPUT and
+    replaces every CAPITALIZED occurrence of any token in name_map, independent of
+    entities. resolve_names had built {"first": {"podiatry": ...}} from the joined span,
+    so the backstop killed the sentence-initial "Podiatry" after the split belt had
+    correctly spared it — which is exactly why the deployed output kept the lowercase
+    instance and lost the capitalized one. api.patient_sweep already carries this
+    whitelist guard; the backstop is its missing sibling."""
+    src = "The case was discussed with podiatry. Podiatry will be consulting."
+    ents = filter_whitelisted_entities(_ents(src, [("podiatry. Podiatry", "FIRST_NAME", 0)]))
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        out = deidentify_text(src, [dict(e) for e in ents], SEED,
+                              name_map={"first": {"podiatry": "Ana"}})
+    n = len(re.findall(r"(?i)(?<![A-Za-z])podiatry(?![A-Za-z])", out))
+    return (n == 2, f"podiatry instances={n}/2 out={out!r}")
+case("1h name_map backstop must not replace a whitelisted token [must survive]",
+     _name_map_backstop)
+
+
+def _name_map_backstop_leak():
+    """The backstop's REAL job must be untouched: a genuine patient token in name_map
+    still gets swept from the output, including occurrences no entity covered."""
+    src = "Patient Whitfield seen. Whitfield remains stable. Discussed with podiatry."
+    ents = filter_whitelisted_entities(_ents(src, [("Whitfield", "LAST_NAME", 0)]))
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        out = deidentify_text(src, [dict(e) for e in ents], SEED,
+                              name_map={"last": {"whitfield": "Sanders"}})
+    leaked = re.search(r"(?<![A-Za-z])Whitfield(?![A-Za-z])", out) is not None
+    kept = re.search(r"(?<![A-Za-z])podiatry(?![A-Za-z])", out) is not None
+    return (not leaked and kept, f"Whitfield_leaked={leaked} podiatry_kept={kept} out={out!r}")
+case("1i LEAK backstop still sweeps a genuine patient token [must stay empty]",
+     _name_map_backstop_leak)
+
+
 # ---- 2. Organism vocabulary (red on HEAD: 'Proteus mirabilis' -> 'Eric Terry') ----
 def _organisms():
     probes = [

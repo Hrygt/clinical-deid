@@ -1391,6 +1391,16 @@ def deidentify_text(text: str, entities: list, seed: int = None, name_map: dict 
     # subject's name cannot leak. Lowercase forms (common words) are left untouched.
     for _kind in ("first", "last"):
         for _orig, _surr in ((name_map or {}).get(_kind) or {}).items():
+            # WHITELIST GUARD (post-deploy defect 2026-07-27, round 2): this backstop
+            # rescans the OUTPUT independent of entities, so a whitelisted token that
+            # reached name_map — e.g. resolve_names keying "podiatry" off the joined span
+            # 'podiatry. Podiatry' — would be replaced here AFTER the span-layer vetoes
+            # correctly spared it. api.patient_sweep already carries this exact guard;
+            # this is its missing sibling. The backstop's real job is untouched: a genuine
+            # patient token is still swept (pinned in the T2 suite).
+            if _orig.strip().lower() in MEDICAL_WHITELIST_LOWER:
+                print(f"[deid] name-map backstop skip {_orig!r} (whitelisted)")
+                continue
             if len(_orig) >= 2:
                 _bk_type = "FIRST_NAME" if _kind == "first" else "LAST_NAME"
 
