@@ -183,9 +183,15 @@ def _combine_adjacent_name_entities(entities: list, text: str) -> list:
             # Allow gap of up to 15 chars for ", MD" or middle initials etc.
             if gap > 15:
                 break
-            
+
             # Check gap only contains expected chars
             gap_text = text[group_end:next_ent["start"]]
+            # A name run must never cross a line break (fix/name-span-newline-clip,
+            # same doctrine as _TITLE_RE/_CRED_RE's horizontal-whitespace separators):
+            # gluing "Tracy" + next line's token into one NAME deletes the newline at
+            # replacement and fuses the lines (the 466697e91ec0 damage shape).
+            if "\n" in gap_text or "\r" in gap_text:
+                break
             # Allow spaces, punctuation, and single uppercase letters (initials)
             if gap_text and not re.match(r'^[\s.,\-\']+[A-Z]?\.?[\s.,\-\']*$|^[\s.,\-\']*$', gap_text):
                 break
@@ -897,7 +903,11 @@ def _split_name_spans(entities: list, text: str) -> list:
     -> two names) and tighten each piece to its alpha edges, so the period and the second
     person's surrogate stay distinct (and "Lee" keys consistently with other "Lee"s).
     A single letter before the period (a middle initial like "A. Grant") is NOT a
-    boundary, so initials are preserved."""
+    boundary, so initials are preserved.
+
+    Also cuts at LINE BREAKS (fix/name-span-newline-clip, replacement-layer belt): a
+    cross-newline span reaching deidentify_text from any caller is split per line, so
+    the surrogate never swallows the newline and line structure survives."""
     out = []
     for ent in entities:
         if ent.get("type") not in ("NAME", "FIRST_NAME", "LAST_NAME"):
@@ -906,7 +916,7 @@ def _split_name_spans(entities: list, text: str) -> list:
         s = ent["start"]
         raw = text[s:ent["end"]]
         cuts = [0]
-        for m in re.finditer(r"(?<=[A-Za-z]{2})\.\s+", raw):
+        for m in re.finditer(r"(?<=[A-Za-z]{2})\.\s+|[\r\n]+", raw):
             cuts.append(m.end())
         cuts.append(len(raw))
         pieces = []
