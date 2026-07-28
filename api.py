@@ -26,21 +26,39 @@ CHUNK_OVERLAP = 256  # Token overlap between chunks
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _read_deployed_version() -> str:
-    """Return the deployed commit SHA written to the VERSION file at deploy time
-    (user-data captures `git rev-parse HEAD` before .git is discarded; the reconcile
-    path rewrites it on overlay). Degrades to "unknown" on ANY problem — missing file,
-    unreadable, or empty — and never raises, so /deid/health can never be broken by it."""
+def _resolve_deployed_version() -> dict:
+    """Resolve what /deid/health reports about the running code.
+
+    RULING 2026-07-27: the endpoint must report the RUNNING code, never a file that can
+    go stale. The old contract read /opt/clinical-deid/VERSION and echoed it; on
+    2026-07-27 that file sat two commits behind the code actually running, so the
+    endpoint reported a SHA that did not describe the service. code_fingerprint.py
+    hashes the files backing the LOADED modules and only reports a commit SHA when the
+    deploy manifest's fingerprint matches it (see that module for the full contract).
+
+    Never raises — version bookkeeping must not be able to break the health check."""
     try:
-        path = os.environ.get("DEID_VERSION_FILE", "/opt/clinical-deid/VERSION")
-        with open(path) as f:
-            sha = f.read().strip()
-        return sha or "unknown"
-    except Exception:
-        return "unknown"
+        import code_fingerprint
+        deploy_dir = os.environ.get(
+            "DEID_DEPLOY_DIR",
+            os.path.dirname(os.path.abspath(__file__)) or "/opt/clinical-deid")
+        return code_fingerprint.resolve_version(deploy_dir)
+    except Exception:  # noqa: BLE001
+        return {"version": "unverified:resolver-error", "version_verified": False,
+                "code_fingerprint": ""}
 
 
-DEPLOYED_VERSION = _read_deployed_version()
+# Resolved lazily at first /deid/health call, not at import: this module is still being
+# executed at import time, so sys.modules["api"] is not yet bound and the running
+# fingerprint could not include api.py itself.
+_VERSION_INFO = None
+
+
+def get_version_info() -> dict:
+    global _VERSION_INFO
+    if _VERSION_INFO is None:
+        _VERSION_INFO = _resolve_deployed_version()
+    return _VERSION_INFO
 
 # === Load Model (once at startup) ===
 # DEID_SKIP_MODEL_LOAD lets model-free unit tests import this module (and its pure
@@ -114,7 +132,13 @@ class HealthResponse(BaseModel):
     max_tokens: int
     chunk_size: int
     chunk_overlap: int
+    # version is the deployed commit SHA, reported ONLY when the deploy manifest's
+    # fingerprint matches the fingerprint of the RUNNING modules; otherwise it carries an
+    # explicit "unverified:<reason>" and version_verified is False. code_fingerprint is
+    # computed from the loaded modules themselves and is always present when resolvable.
     version: str = "unknown"
+    version_verified: bool = False
+    code_fingerprint: str = ""
 
 
 # === Chunking Logic ===
@@ -862,6 +886,7 @@ def patient_sweep(text: str, entities: list) -> list:
 @app.get("/deid/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
+    info = get_version_info()
     return HealthResponse(
         status="healthy",
         model_loaded=True,
@@ -869,7 +894,9 @@ async def health_check():
         max_tokens=MAX_TOKENS,
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
-        version=DEPLOYED_VERSION,
+        version=info["version"],
+        version_verified=info["version_verified"],
+        code_fingerprint=info["code_fingerprint"],
     )
 
 
