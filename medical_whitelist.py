@@ -413,6 +413,82 @@ MEDICAL_WHITELIST = {
     # "Will"/"Present" deliberately NOT added (plausible real name / PHI asymmetry).
     "propranolol", "bradycardia",
 
+    # === SPECIALTY / SERVICE NOUNS (fix/specialty-whitelist, grader report d75ee47a6443) ===
+    # Witness: "The case was discussed with podiatry." -> "...discussed with Patricia."
+    # The trigger is the name-likely frame ("discussed with <Capitalized>", "<Specialty>
+    # consulted"), and before this block the file held ZERO specialty words, so nothing
+    # could veto. A specialty token de-id has already deleted is UNRECOVERABLE by any
+    # downstream grader vocabulary (corpus/README.md cat3-podiatry-token) — the Cat 3
+    # externality axis reads exactly these words.
+    # CENSUS (2026-07-27, read-only over gold 918 + reports 77 + accuracy 425): 58 distinct
+    # specialty tokens in ~330 discussion-frame hits; "Podiatry" was Title-cased in 8/8
+    # occurrences — Title case is the vulnerable shape, and the model tags it FIRST_NAME.
+    # ADMISSION RULE — nouns only, and NOTHING that is a plausible person name (PHI
+    # ASYMMETRY: a whitelisted token survives redaction EVERYWHERE, so a patient with that
+    # surname would leak). Every token below was checked against the faker first/last-name
+    # lists (0 collisions) AND judged by hand.
+    # DELIBERATELY EXCLUDED, with reasons:
+    #   "endo"  — Endo is a common Japanese surname (leak vector), despite 0 faker hits;
+    #   "cards" — the Card/Cards surname family, and a common English word;
+    #   ALL 2-3 letter abbreviations (ID, GI, PA, PT, OT, CM, IR, RD, RT, SLP, PCP, CTS,
+    #     ENT, NP, RN) — patient-initials shaped; the census recommends gating those on the
+    #     FRAME, which this context-free exact-match filter cannot express. Parked.
+    #   "family"/"patient"/"daughter" — role words, already covered above, and not specialties.
+    # -- full specialty nouns --
+    "podiatry", "podiatrist",
+    "cardiology", "cardiologist", "cardiothoracic", "electrophysiology",
+    "nephrology", "nephrologist", "renal",
+    "pulmonology", "pulmonologist",
+    "urology", "urologist",
+    "neurology", "neurologist", "neurosurgery", "neurosurgeon",
+    "psychiatry", "psychiatrist",
+    "oncology", "oncologist", "hematology", "hematologist",
+    "endocrinology", "endocrinologist",
+    "gastroenterology", "gastroenterologist",
+    "rheumatology", "rheumatologist",
+    "dermatology", "dermatologist",
+    "radiology", "pathology", "ophthalmology", "otolaryngology",
+    "anesthesia", "anesthesiology", "anesthesiologist",
+    "orthopedics", "orthopaedics", "orthopedic",
+    "physiatry", "physiatrist",
+    "hospitalist", "intensivist", "infectious", "interventional", "vascular", "surgery",
+    "nursing", "nutrition", "dietitian", "pharmacy", "pharmacist",
+    "palliative", "hospice",
+    # -- clipped service forms actually witnessed in the census (none is a surname) --
+    "neuro", "nephro", "pulm", "psych", "ortho", "heme", "onc",
+    # -- service bigrams (the adjacent-name-pair path in filter_whitelisted_entities
+    #    handles these, as does a single span whose text is the whole bigram) --
+    "Wound Care", "Case Management", "Care Management", "Infectious Disease",
+    "General Surgery", "Vascular Surgery", "Cardiothoracic Surgery", "Palliative Care",
+    "Interventional Radiology", "Pain Management", "Critical Care", "Speech Therapy",
+    "Physical Therapy", "Occupational Therapy", "Respiratory Therapy", "Social Work",
+
+    # === ORGANISM VOCABULARY (same mechanism as the specialty block) ===
+    # Witness: "Enterobacter cloacae" -> "Enterobacter gonzalez" (gold 87a23c58a070 /
+    # report 87c3e2001703); also "Proteus mirabilis" -> "Eric Terry" (reproduced live
+    # 2026-07-27), "Morganella morganii" -> "Morganella morbolton". The NER reads a
+    # binomial as First+Last and surrogates the species epithet (and sometimes the genus)
+    # as a person name — the culture result is destroyed for the Data axis.
+    # Same admission rule. EXCLUDED: "candida" (Cándida is a real Spanish/Italian given
+    # name) and "providencia" (likewise) — their EPITHETS are still whitelisted below, so
+    # "Candida albicans" degrades to a surrogated genus rather than a garbled binomial.
+    # NOT CLOSED BY THIS: sub-token glueing ("Klebsiella pneumoniajones",
+    # "Streptococcus viridCWNP") is the NER span-fragment problem, not a vocabulary gap.
+    # -- genera --
+    "enterobacter", "escherichia", "klebsiella", "pseudomonas", "staphylococcus",
+    "streptococcus", "enterococcus", "proteus", "serratia", "citrobacter",
+    "acinetobacter", "clostridium", "clostridioides", "haemophilus", "moraxella",
+    "morganella", "stenotrophomonas", "bacteroides", "corynebacterium",
+    # -- species epithets (census-present + the common siblings) --
+    "aureus", "pneumoniae", "coli", "cloacae", "cloaca", "oxytoca", "aeruginosa",
+    "epidermidis", "faecalis", "faecium", "mirabilis", "marcescens", "freundii",
+    "baumannii", "albicans", "glabrata", "difficile", "influenzae", "catarrhalis",
+    "morganii", "stuartii", "maltophilia", "fragilis", "vulgaris", "raffinosus",
+    "viridans", "constellatus", "parapsilosis", "agalactiae", "capitis", "avium",
+    "dysgalactiae", "vestibularis", "lutetiensis", "mucogenicum", "phocaicum",
+    "planticola", "striatum", "tropicalis", "krusei", "anginosus", "pyogenes",
+    "saprophyticus", "haemolyticus", "lugdunensis",
+
     # === CLINICAL STATUS ===
     "Present On",
     "Present Illness",
