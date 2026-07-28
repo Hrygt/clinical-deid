@@ -1,6 +1,7 @@
 # api.py - Clinical De-identification FastAPI Service
 # Port 8001 on EC2 alongside CPT service (port 8000)
-# v1.2.1 - Use deidentify_text from deid.py (includes DOB cleanup)
+# v1.3.0 - NAME spans never cross line breaks (span-layer clip); specialty/organism
+#          whitelist veto; reconcile retired, /deid/health reports the RUNNING code
 
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification
@@ -79,7 +80,7 @@ else:
 app = FastAPI(
     title="Clinical De-identification API",
     description="PHI de-identification for clinical notes using Clinical-Longformer",
-    version="1.2.0",
+    version="1.3.0",
 )
 
 app.add_middleware(
